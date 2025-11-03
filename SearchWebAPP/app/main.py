@@ -221,7 +221,7 @@ if st.session_state.is_processing:
                 "question": combined_question, 
                 "target_labels": [], 
                 "service_labels": [],
-                "conversation_history": st.session_state.history[:-1],  # 現在の入力以外の履歴
+                "conversation_history": st.session_state.history,  # 全ての会話履歴
                 "user_profile": st.session_state.user_profile
             }
         )
