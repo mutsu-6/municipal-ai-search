@@ -60,11 +60,11 @@ def label_question(
         if profile_parts:
             profile_context = "\n\n【ユーザー情報】\n" + "\n".join(profile_parts) + "\n"
     
-    # 会話履歴がある場合はmessages配列として渡す
+    # 会話履歴がある場合はmessages配列として渡す（全ての会話履歴を含める）
     messages = [{"role": "system", "content": system_prompt}]
     if conversation_history and len(conversation_history) > 0:
-        recent_history = conversation_history[-10:]
-        for role, msg in recent_history:
+        # 全ての会話履歴を含める
+        for role, msg in conversation_history:
             if role == "user":
                 messages.append({"role": "user", "content": msg})
             elif role == "assistant":
@@ -170,9 +170,8 @@ class ServiceSelector:
         # 会話履歴をフォーマット（メッセージ配列として構築）
         messages = []
         if conversation_history and len(conversation_history) > 0:
-            # 直近の会話履歴を含める（最大8往復分＝16メッセージ）
-            recent_history = conversation_history[-16:] if len(conversation_history) > 16 else conversation_history
-            for role, msg in recent_history:
+            # 全ての会話履歴を含める
+            for role, msg in conversation_history:
                 if role == "user":
                     messages.append({"role": "user", "content": msg})
                 elif role == "assistant":
