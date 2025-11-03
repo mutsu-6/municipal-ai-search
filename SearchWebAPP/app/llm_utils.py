@@ -361,3 +361,77 @@ class IntentBuilder:
             "followup": followup,
         }
 
+
+# --------------------------------------------------------------------
+# ユーザー情報抽出：会話履歴から年齢、家族構成などを抽出
+# 返り値: {"年齢層": str, "家族構成": str, "関心事": List[str], ...}
+# --------------------------------------------------------------------
+def extract_user_info(conversation_history: List[Tuple[str, str]], current_profile: Dict[str, Any] = None) -> Dict[str, Any]:
+    """
+    会話履歴からユーザー情報を抽出してプロフィールを更新します。
+    
+    Args:
+        conversation_history: 会話履歴 [(role, message), ...]
+        current_profile: 現在のプロフィール情報
+    
+    Returns:
+        更新されたプロフィール情報
+    """
+    system_prompt = (
+        "あなたは会話分析の専門家です。会話履歴からユーザーの情報を抽出し、"
+        "以下のフィールドに該当する情報をJSONで返してください。"
+        "必ずJSONのみを出力し、キーは以下の通りです。\n\n"
+        "- 年齢層: ユーザーの年齢層（例：30代、40代、高齢者など）\n"
+        "- 家族構成: 家族構成の詳細（例：夫婦2人、小学生と5歳の子どもがいる家族など）\n"
+        "- 関心事: ユーザーの関心事や興味のある分野のリスト（配列）\n"
+        "- 急ぎの要件: 緊急度や期限（例：来月まで、すぐに必要な、待てるなど）\n"
+        "- 収入状況: 収入に関する情報（例：低所得、高所得、指定なしなど）\n"
+        "- 居住環境: 居住環境に関する情報（例：賃貸、持ち家、一人暮らしなど）\n\n"
+        "現在のプロフィール情報がある場合は、それに追加・更新する形で情報を抽出してください。"
+        "既に情報があるフィールドは上書きされます。"
+    )
+    
+    # 会話履歴をmessages配列として構築
+    messages = [{"role": "system", "content": system_prompt}]
+    if conversation_history and len(conversation_history) > 0:
+        # 全ての会話履歴を含める
+        for role, msg in conversation_history:
+            if role == "user":
+                messages.append({"role": "user", "content": msg})
+            elif role == "assistant":
+                messages.append({"role": "assistant", "content": msg})
+    
+    # 現在のプロフィール情報を追加
+    if current_profile:
+        profile_info = "現在のプロフィール情報:\n"
+        for key, value in current_profile.items():
+            if value:
+                if isinstance(value, list):
+                    profile_info += f"- {key}: {', '.join(value)}\n"
+                else:
+                    profile_info += f"- {key}: {value}\n"
+        messages.append({"role": "user", "content": profile_info})
+    
+    messages.append({"role": "user", "content": "上記の会話履歴からユーザー情報を抽出してJSONで返してください。"})
+
+    try:
+        resp = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=messages,
+            temperature=0,
+            response_format={"type": "json_object"},  # JSON を強制
+        )
+        content = (resp.choices[0].message.content or "").strip()
+        
+        # JSON解析
+        try:
+            data = json.loads(content)
+            logger.info("Extracted user info: %s", data)
+            return data
+        except Exception as e:
+            logger.warning("User info extraction JSON parse failed: %s | raw=%s", e, content[:300].replace("\n", " "))
+            return {}
+    except Exception as e:
+        logger.warning("Failed to extract user info: %s", e)
+        return {}
+

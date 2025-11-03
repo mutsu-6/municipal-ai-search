@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from conversation_graph import workflow, feedback_workflow
 from catalog_utils import CatalogSearchEngine
 from embed_utils import embed_text
-from llm_utils import ServiceSelector
+from llm_utils import ServiceSelector, extract_user_info
 from db_utils import (
     save_conversation, get_conversation_history,
     save_search_query, save_feedback, save_service_click,
@@ -351,6 +351,21 @@ if st.session_state.is_processing:
 
         st.session_state.history.append(("assistant", assistant_reply))
         logger.info("Rendered response (length: %d chars)", len(assistant_reply))
+        
+        # ユーザー情報抽出とプロフィール更新
+        try:
+            extracted_info = extract_user_info(
+                st.session_state.history,
+                st.session_state.user_profile
+            )
+            if extracted_info:
+                # プロフィールを更新
+                for key, value in extracted_info.items():
+                    if value:  # 値がある場合のみ更新
+                        st.session_state.user_profile[key] = value
+                logger.info("Updated user profile: %s", st.session_state.user_profile)
+        except Exception as e:
+            logger.warning("Failed to extract user info: %s", e)
         
         # データベースに保存
         if db_enabled:
