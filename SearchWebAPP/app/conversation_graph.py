@@ -1,5 +1,5 @@
 # app/conversation_graph.py
-from typing import List, Optional, TypedDict
+from typing import List, Optional, TypedDict, Tuple, Dict, Any
 import logging
 from langgraph.graph import StateGraph, END
 
@@ -21,6 +21,9 @@ class GraphState(TypedDict):
     # 意図確定フロー
     intent_sentence: Optional[str]
     intent_confidence: Optional[float]
+    # 会話履歴
+    conversation_history: Optional[List[Tuple[str, str]]]  # [(role, message), ...]
+    user_profile: Optional[Dict[str, Any]]  # ユーザープロフィール
 
 
 # -------------------------
@@ -29,7 +32,13 @@ class GraphState(TypedDict):
 def classify_node(state: GraphState) -> GraphState:
     logger.info("ClassifyNode: question=%s", state["question"])
     # ユーザーの質問に対して「対象者」と「該当サービス」のラベルを付与
-    labels = label_question(state["question"])
+    conversation_history = state.get("conversation_history")
+    user_profile = state.get("user_profile")
+    labels = label_question(
+        state["question"],
+        conversation_history=conversation_history,
+        user_profile=user_profile
+    )
     state["target_labels"] = labels.get("target_labels", []) or []
     state["service_labels"] = labels.get("service_labels", []) or []
 

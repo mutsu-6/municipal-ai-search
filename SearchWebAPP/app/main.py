@@ -167,7 +167,13 @@ if submitted and user_msg:
     # 2) LangGraph workflow
     try:
         state = workflow.invoke(
-            {"question": combined_question, "target_labels": [], "service_labels": []}
+            {
+                "question": combined_question, 
+                "target_labels": [], 
+                "service_labels": [],
+                "conversation_history": st.session_state.history[:-1],  # 現在の入力以外の履歴
+                "user_profile": st.session_state.user_profile
+            }
         )
         logger.info("Workflow output: %s", state)
     except ValueError as e:
