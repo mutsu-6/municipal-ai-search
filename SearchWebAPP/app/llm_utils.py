@@ -209,6 +209,9 @@ class ServiceSelector:
         # 現在の質問にユーザープロフィールとラベル情報を追加
         current_query_with_context = f"ユーザーの質問: {user_query}{profile_context}{labels_info}\n\n"
         current_query_with_context += f"検索結果のサービス:\n{services_json}\n\n"
+        current_query_with_context += "【重要な指示】\n"
+        current_query_with_context += "会話履歴を必ず参照してください。上記の「ユーザーの質問」が短い場合（例：「他にも教えて」「続けよ」など）は、\n"
+        current_query_with_context += "会話履歴の前の文脈を理解して応答してください。\n\n"
         current_query_with_context += "上記の検索結果を基に、会話形式で詳細な説明を生成してください。"
         current_query_with_context += "各サービスについて、どのような制度なのか、対象条件、申請方法、期限などを含めて説明してください。"
         current_query_with_context += "ユーザー情報が不足している場合は、自然な形で追加の質問を促してください。"
