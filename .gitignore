@@ -47,3 +47,6 @@ mysql_data/
 # Large data files (if needed to exclude)
 # *.json (uncomment if embeddings are too large)
 
+# Streamlit
+# .streamlit/config.toml is needed for Streamlit Cloud
+
