@@ -6,6 +6,17 @@ AI-powered municipal service search system with conversational interface.
 [![Python](https://img.shields.io/badge/Python-3.11-blue)](https://python.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 
+## 🌐 アクセスリンク
+
+### インターネット公開URL（Streamlit Cloud）
+**デプロイ待ち**: https://municipal-ai-search.streamlit.app
+
+### ローカル/ネットワーク
+- **ローカル**: http://localhost:8501
+- **ネットワーク**: http://192.168.11.9:8501
+
+---
+
 ## ✨ Features
 
 - 🤖 **AI Conversational Search** - Natural language interface using GPT-4o-mini
@@ -15,33 +26,64 @@ AI-powered municipal service search system with conversational interface.
 - 🔍 **Smart Guidance** - LangGraph workflow for intelligent assistance
 - 📊 **155 Municipal Services** - Comprehensive Kokubunji City service catalog
 
-## 🚀 Quick Start
+## 🚀 デプロイ手順（Streamlit Cloud）
 
-### Local Development
+### 1. Streamlit Cloudにアクセス
+https://share.streamlit.io/ でログイン
 
+### 2. アプリを作成
+1. 「New app」をクリック
+2. 以下を設定：
+   - **Repository**: mutsu-6/municipal-ai-search
+   - **Branch**: main
+   - **Main file path**: `SearchWebAPP/app/main.py`
+
+### 3. 環境変数を設定
+Advanced settings → Secrets：
+```toml
+[secrets]
+OPENAI_API_KEY = "あなたのAPIキー"
+LLM_MODEL = "gpt-4o-mini"
+OPENAI_EMBEDDING_MODEL = "text-embedding-ada-002"
+```
+
+### 4. デプロイ実行
+「Deploy!」をクリック → 完了！
+
+詳細: [DEPLOY_NOW_STEPS.md](DEPLOY_NOW_STEPS.md)
+
+---
+
+## 🛠️ Local Development
+
+### Docker
 ```bash
 cd SearchWebAPP
 docker compose up
 ```
 
-Access at: http://localhost:8501
+Access: http://localhost:8501
 
-### Deploy to Streamlit Cloud
+### 直接実行
+```bash
+cd SearchWebAPP
+python -m venv .venv
+source .venv/bin/activate
+pip install -r app/requirements.txt
+streamlit run app/main.py
+```
 
-1. Push to GitHub
-2. Go to https://share.streamlit.io/
-3. Select your repository
-4. Main file: `SearchWebAPP/app/main.py`
-5. Set environment variables
-6. Deploy!
+---
 
 ## 📚 Documentation
 
-- **[QUICK_START.md](QUICK_START.md)** - Get started quickly
-- **[SHARING_INFO.md](SHARING_INFO.md)** - Sharing and deployment info
-- **[INTERNET_SHARING_GUIDE.md](INTERNET_SHARING_GUIDE.md)** - Internet deployment guide
-- **[NEW_REPOSITORY_GUIDE.md](NEW_REPOSITORY_GUIDE.md)** - Create new repo guide
-- **[SearchWebAPP/README.md](SearchWebAPP/README.md)** - Technical specifications
+- **[DEPLOY_NOW_STEPS.md](DEPLOY_NOW_STEPS.md)** - Streamlit Cloudデプロイ手順
+- **[STREAMLIT_CLOUD_DEPLOY.md](STREAMLIT_CLOUD_DEPLOY.md)** - 詳細なデプロイガイド
+- **[WHICH_LINK_TO_SHARE.md](WHICH_LINK_TO_SHARE.md)** - リンク共有ガイド
+- **[QUICK_START.md](QUICK_START.md)** - クイックスタート
+- **[SearchWebAPP/README.md](SearchWebAPP/README.md)** - 技術仕様
+
+---
 
 ## 🏗️ Architecture
 
@@ -98,19 +140,9 @@ MYSQL_DATABASE=searchapp
 - **Data Format**: JSON
 - **Source**: https://www.city.kokubunji.tokyo.jp/
 
-## 🤝 Contributing
-
-Contributions welcome! Please read the documentation first.
-
 ## 📝 License
 
 See [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- OpenAI for GPT-4o-mini and embeddings
-- Streamlit for the framework
-- Kokubunji City for open data
 
 ---
 
