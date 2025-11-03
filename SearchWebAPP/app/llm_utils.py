@@ -1,7 +1,7 @@
 # app/llm_utils.py
 import os
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 
 from openai import OpenAI
 import logging
@@ -10,7 +10,15 @@ import logging
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 
 logger = logging.getLogger(__name__)
-client = OpenAI()
+
+# APIキーの確認とログ出力
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key or api_key.startswith("sk-your-"):
+    logger.error("OPENAI_API_KEY が正しく設定されていません。.env ファイルを確認してください。")
+    raise ValueError("OPENAI_API_KEY が設定されていません。.env ファイルに正しいAPIキーを設定してください。")
+
+logger.info("OpenAI API クライアントを初期化します（モデル: %s）", DEFAULT_MODEL)
+client = OpenAI(api_key=api_key)
 
 
 # --------------------------------------------------------------------
@@ -93,6 +101,123 @@ class ServiceSelector:
         except Exception as e:
             logger.warning("ServiceSelector JSON parse failed: %s | raw=%s", e, content[:300].replace("\n", " "))
             return []
+
+    def generate_conversational_response(
+        self, 
+        user_query: str, 
+        services: List[Dict[str, Any]], 
+        target_labels: List[str] = None,
+        service_labels: List[str] = None,
+        conversation_history: List[Tuple[str, str]] = None,
+        user_profile: Dict[str, Any] = None
+    ) -> str:
+        """
+        検索結果を基に、会話形式の詳細な説明を生成します。
+        
+        Args:
+            user_query: ユーザーの質問
+            services: 検索結果のサービスリスト [{"title": str, "url": str, "概要": str, ...}, ...]
+            target_labels: 対象者ラベル
+            service_labels: サービスラベル
+        
+        Returns:
+            会話形式のマークダウン形式の説明文
+        """
+        services_json = json.dumps(services, ensure_ascii=False, indent=2)
+        labels_info = ""
+        if target_labels or service_labels:
+            labels_info = f"\n対象者: {', '.join(target_labels or [])}\nサービス種別: {', '.join(service_labels or [])}"
+        
+        # ユーザープロフィール情報をフォーマット
+        profile_context = ""
+        if user_profile:
+            profile_parts = []
+            if user_profile.get("年齢層"):
+                profile_parts.append(f"年齢層: {user_profile['年齢層']}")
+            if user_profile.get("家族構成"):
+                profile_parts.append(f"家族構成: {user_profile['家族構成']}")
+            if user_profile.get("関心事"):
+                profile_parts.append(f"関心事: {', '.join(user_profile['関心事'])}")
+            if user_profile.get("急ぎの要件"):
+                profile_parts.append(f"急ぎの要件: {user_profile['急ぎの要件']}")
+            if profile_parts:
+                profile_context = "\n\n【ユーザー情報】\n" + "\n".join(profile_parts) + "\n"
+        
+        # 会話履歴をフォーマット
+        history_context = ""
+        if conversation_history and len(conversation_history) > 0:
+            # 直近の会話履歴を含める（最大5往復分）
+            recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
+            history_parts = []
+            for role, msg in recent_history:
+                if role == "user":
+                    history_parts.append(f"ユーザー: {msg}")
+                elif role == "assistant":
+                    history_parts.append(f"アシスタント: {msg}")
+            if history_parts:
+                history_context = "\n\n【前の会話履歴】\n" + "\n".join(history_parts) + "\n"
+        
+        system_prompt = (
+            "あなたは親切で知識豊富な自治体サービスの案内係です。ChatGPTと同レベルの"
+            "人間らしい自然な会話を提供しながら、ユーザーの質問に対して検索結果を基に"
+            "詳細な説明を提供してください。\n\n"
+            "【重要な役割】\n"
+            "- 会話を通じてユーザーの状況を理解し、必要な情報を自然に収集する\n"
+            "- ユーザーが具体的な質問ができない場合でも、優しく誘導して必要な情報を引き出す\n"
+            "- 年齢、家族構成、収入状況、急ぎの要件など、サービス選定に重要な情報を忘れずに把握する\n\n"
+            "【返答の形式】\n"
+            "1. 冒頭で、ユーザーの状況を深く理解していることを示す、共感的で親しみやすい挨拶\n"
+            "2. 絵文字（✅、🔍、🎯、💡、📝など）を使った視覚的な構造化\n"
+            "3. 主な支援制度の詳細な説明（各制度の説明、対象条件、申請期限、特筆事項など）\n"
+            "4. 実務的な留意点・確認すべきこと（よくある質問や注意点を含む）\n"
+            "5. 次のステップ（具体的で実行可能なアクション）\n\n"
+            "【重要な注意事項】\n"
+            "- 人間らしい自然な会話トーンを心がける（機械的にならないよう注意）\n"
+            "- ユーザーの状況に深く共感し、適切な助言を提供する\n"
+            "- ユーザー情報が不足している場合は、会話の流れの中で自然に質問を追加する\n"
+            "- 各サービスには必ずURLを明記し、クリックできるようフォーマットする\n"
+            "- 実務的な情報（申請期限、対象条件、必要書類など）を正確に記載する\n"
+            "- マークダウン形式で返答する（見出し、リスト、強調、引用など）\n"
+            "- 必要に応じて、関連する他のサービスにも言及する\n"
+            "- ユーモアや励ましを適度に交えつつ、専門性と正確性を重視する\n"
+        )
+        
+        user_prompt = (
+            f"ユーザーの質問: {user_query}{profile_context}{history_context}{labels_info}\n\n"
+            f"検索結果のサービス:\n{services_json}\n\n"
+            "上記の検索結果を基に、会話形式で詳細な説明を生成してください。"
+            "各サービスについて、どのような制度なのか、対象条件、申請方法、期限などを含めて説明してください。"
+            "ユーザー情報が不足している場合は、自然な形で追加の質問を促してください。"
+        )
+        
+        try:
+            resp = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.8,  # より人間らしい自然な会話のため温度を上げる
+                top_p=0.9,  # nucleus samplingで多様性を確保
+                presence_penalty=0.3,  # 繰り返しを減らす
+                frequency_penalty=0.3,  # 繰り返しを減らす
+            )
+            content = (resp.choices[0].message.content or "").strip()
+            logger.info("Generated conversational response (length: %d)", len(content))
+            return content
+        except Exception as e:
+            logger.exception("Failed to generate conversational response")
+            # フォールバック: シンプルな形式で返す
+            fallback_lines = []
+            for svc in services[:5]:
+                title = svc.get("title", "")
+                url = svc.get("url", "")
+                if title:
+                    if url:
+                        fallback_lines.append(f"- **{title}** ({url})")
+                    else:
+                        fallback_lines.append(f"- **{title}**")
+            return f"以下のサービスが見つかりました:\n\n" + "\n".join(fallback_lines)
 
 
 # --------------------------------------------------------------------

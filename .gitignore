@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# MySQL data
+mysql_data/
+
+# Temporary files
+*.tmp
+*.bak
+*.cache
+
+# SearchWebAPP specific
+SearchWebAPP/.venv/
+SearchWebAPP/app/__pycache__/
+SearchWebAPP/.env
+
+# Database volumes
+mysql_data/
+
+# Large data files (if needed to exclude)
+# *.json (uncomment if embeddings are too large)
+

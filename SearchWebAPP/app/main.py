@@ -1,7 +1,10 @@
 # app/main.py
 import logging
+import time
+import uuid
 from typing import Dict, Any, List, Tuple
 
+import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -9,6 +12,11 @@ from conversation_graph import workflow, feedback_workflow
 from catalog_utils import CatalogSearchEngine
 from embed_utils import embed_text
 from llm_utils import ServiceSelector
+from db_utils import (
+    save_conversation, get_conversation_history,
+    save_search_query, save_feedback, save_service_click,
+    test_db_connection
+)
 
 # -----------------------------------------------------------------------------
 # 初期設定
@@ -21,10 +29,43 @@ st.set_page_config(page_title="自治体サービス検索", layout="wide")
 st.title("自治体サービス検索システム")
 
 # -----------------------------------------------------------------------------
+# データベース接続確認
+# -----------------------------------------------------------------------------
+db_enabled = True
+try:
+    db_enabled = test_db_connection()
+    if db_enabled:
+        logger.info("Database connection successful")
+    else:
+        logger.warning("Database connection failed, continuing without persistence")
+except Exception as e:
+    logger.warning("Database not available: %s, continuing without persistence", e)
+    db_enabled = False
+
+# -----------------------------------------------------------------------------
+# セッションID生成
+# -----------------------------------------------------------------------------
+if "session_id" not in st.session_state:
+    # 一意のセッションIDを生成
+    st.session_state.session_id = str(uuid.uuid4())
+    logger.info("Generated session_id: %s", st.session_state.session_id)
+
+# -----------------------------------------------------------------------------
 # セッション状態
 # -----------------------------------------------------------------------------
 if "history" not in st.session_state:
-    st.session_state.history: List[Tuple[str, str]] = []
+    # データベースから履歴を読み込む
+    if db_enabled:
+        try:
+            db_history = get_conversation_history(st.session_state.session_id)
+            st.session_state.history = db_history if db_history else []
+            if db_history:
+                logger.info("Loaded %d messages from database", len(db_history))
+        except Exception as e:
+            logger.warning("Failed to load history from database: %s", e)
+            st.session_state.history: List[Tuple[str, str]] = []
+    else:
+        st.session_state.history: List[Tuple[str, str]] = []
 if "pending_question" not in st.session_state:
     st.session_state.pending_question = ""
 if "awaiting_feedback" not in st.session_state:
@@ -35,6 +76,16 @@ if "last_query" not in st.session_state:
     st.session_state.last_query = ""
 if "last_labels" not in st.session_state:
     st.session_state.last_labels = ([], [])
+# ユーザープロフィール情報（会話を通じて収集）
+if "user_profile" not in st.session_state:
+    st.session_state.user_profile = {
+        "年齢層": None,
+        "家族構成": None,
+        "関心事": [],
+        "急ぎの要件": None,
+        "収入状況": None,
+        "居住環境": None
+    }
 
 # -----------------------------------------------------------------------------
 # ユーティリティ
@@ -97,8 +148,14 @@ with st.form("chat-form", clear_on_submit=True):
 if submitted and user_msg:
     # 1) store user message
     st.session_state.history.append(("user", user_msg))
-    st.chat_message("user").write(user_msg)  # ★ その場で描画
     logger.info("Received user message: %s", user_msg)
+    
+    # データベースに保存
+    if db_enabled:
+        try:
+            save_conversation(st.session_state.session_id, "user", user_msg)
+        except Exception as e:
+            logger.warning("Failed to save user message to database: %s", e)
 
     # combine with pending question if we previously asked for target/intent info
     combined_question = f"{st.session_state.pending_question} {user_msg}".strip()
@@ -113,11 +170,41 @@ if submitted and user_msg:
             {"question": combined_question, "target_labels": [], "service_labels": []}
         )
         logger.info("Workflow output: %s", state)
-    except Exception:
-        logger.exception("workflow failed")
-        st.session_state.history.append(
-            ("assistant", "内部エラーが発生しました。時間を置いて再度お試しください。")
-        )
+    except ValueError as e:
+        # APIキー関連のエラー
+        logger.exception("APIキーの設定エラー")
+        error_msg = str(e)
+        if "OPENAI_API_KEY" in error_msg:
+            st.session_state.history.append(
+                ("assistant", "APIキーが正しく設定されていません。管理者にお問い合わせください。")
+            )
+        else:
+            st.session_state.history.append(
+                ("assistant", f"設定エラーが発生しました: {error_msg}")
+            )
+        st.rerun()
+    except Exception as e:
+        logger.exception("workflow failed: %s", str(e))
+        error_type = type(e).__name__
+        error_msg = str(e)
+        
+        # OpenAI API関連のエラーを詳しく表示
+        if "AuthenticationError" in error_type or "401" in error_msg or "api key" in error_msg.lower():
+            st.session_state.history.append(
+                ("assistant", "OpenAI APIの認証エラーが発生しました。APIキーが無効か、設定が正しくありません。")
+            )
+        elif "RateLimitError" in error_type or "429" in error_msg:
+            st.session_state.history.append(
+                ("assistant", "APIのリクエスト制限に達しました。しばらく時間を置いて再度お試しください。")
+            )
+        elif "InvalidRequestError" in error_type or "400" in error_msg:
+            st.session_state.history.append(
+                ("assistant", f"リクエストエラーが発生しました: {error_msg[:100]}")
+            )
+        else:
+            st.session_state.history.append(
+                ("assistant", f"内部エラーが発生しました: {error_type} - {error_msg[:200]}")
+            )
         st.rerun()
 
     # 分岐1: 対象者が不明 -> 先に対象者確定
@@ -139,7 +226,8 @@ if submitted and user_msg:
     intent_sentence = state.get("intent_sentence") or combined_question
     target_labels = state.get("target_labels", [])
     service_labels = state.get("service_labels", [])
-    logger.info("SEARCH intent_sentence='%s'", intent_sentence)
+    confidence = state.get("intent_confidence", 0.0)
+    logger.info("SEARCH intent_sentence='%s' confidence=%.2f", intent_sentence, confidence)
     logger.info("検索を実行: 対象者ラベル=%s サービスラベル=%s", target_labels, service_labels)
 
     st.session_state.last_labels = (target_labels, service_labels)
@@ -153,53 +241,81 @@ if submitted and user_msg:
     query_vec = embed_text(intent_sentence)
     ranked_df = searcher.rank(filtered_df, query_vec, top_n=50)
 
-    # 5) 推薦/表示
-    header = f"**検索用にこう解釈しました：**「{intent_sentence}」"
+    # 5) 推薦/表示（会話形式の返答を生成）
     try:
         if ranked_df is None or len(ranked_df) == 0:
-            assistant_reply = header + "\n\nすみません、該当する自治体サービスが見つかりませんでした。別の表現でお試しください。"
+            assistant_reply = f"{combined_question}\n\nすみません、該当する自治体サービスが見つかりませんでした。別の表現でお試しください。"
         else:
-            # 候補を安全に構築
+            # 候補を安全に構築（詳細情報を含む）
             candidates = []
-            for _, row in ranked_df.iterrows():
+            for _, row in ranked_df.head(20).iterrows():  # 上位20件を候補として使用
                 t, u = row_to_title_url(row)
                 if t:
-                    candidates.append({"title": t, "url": u})
+                    service_data = {"title": t, "url": u}
+                    # 行から他の情報も取得（概要、対象者など）
+                    overview = series_get(row, "概要")
+                    if overview is not None and not (isinstance(overview, float) and pd.isna(overview)):
+                        if isinstance(overview, (list, tuple)) and len(overview) > 0:
+                            service_data["概要"] = str(overview[0])
+                        elif isinstance(overview, str):
+                            service_data["概要"] = overview
+                    
+                    row_target_labels = series_get(row, "対象者ラベル")
+                    if row_target_labels is not None and not (isinstance(row_target_labels, float) and pd.isna(row_target_labels)):
+                        if isinstance(row_target_labels, (list, tuple)) and len(row_target_labels) > 0:
+                            service_data["対象者"] = ", ".join(str(l) for l in row_target_labels)
+                    
+                    row_service_labels = series_get(row, "サービスラベル")
+                    if row_service_labels is not None and not (isinstance(row_service_labels, float) and pd.isna(row_service_labels)):
+                        if isinstance(row_service_labels, (list, tuple)) and len(row_service_labels) > 0:
+                            service_data["サービス種別"] = ", ".join(str(l) for l in row_service_labels)
+                    candidates.append(service_data)
 
-            # LLM 推薦（失敗してもフォールバックで上位3件を出す）
-            recs = []
+            # 会話形式の返答を生成
             try:
-                recs = selector.recommend(intent_sentence, candidates) or []
+                assistant_reply = selector.generate_conversational_response(
+                    user_query=combined_question,
+                    services=candidates[:10],  # 上位10件を使用
+                    target_labels=target_labels,
+                    service_labels=service_labels,
+                    conversation_history=st.session_state.history,  # 会話履歴を追加
+                    user_profile=st.session_state.user_profile  # ユーザープロフィールを追加
+                )
+                logger.info("Generated conversational response successfully")
             except Exception:
-                logger.exception("recommend failed; fall back to top-3")
-
-            if recs:
-                lines = []
-                for r in recs:
-                    t = str(r.get("title", "")).strip()
-                    u = extract_url(r.get("url"))
-                    if t:
-                        lines.append(f"- **{t}** ({u})" if u else f"- **{t}**")
-                assistant_reply = header + ("\n\nおすすめのサービスはこちらです:\n" + "\n".join(lines)
-                                            if lines else "\n\nおすすめ候補を生成できませんでした。")
-            else:
-                # フォールバック: 上位3件
-                top_rows = ranked_df.head(3)
+                logger.exception("Failed to generate conversational response; using fallback")
+                # フォールバック: シンプルな形式で返す
+                top_rows = ranked_df.head(5)
                 lines = []
                 for _, row in top_rows.iterrows():
                     t, u = row_to_title_url(row)
                     if t:
                         lines.append(f"- **{t}** ({u})" if u else f"- **{t}**")
-                assistant_reply = header + ("\n\n以下のサービスが見つかりました:\n" + "\n".join(lines)
-                                            if lines else "\n\n候補が生成できませんでした。")
+                assistant_reply = f"以下のサービスが見つかりました:\n\n" + "\n".join(lines) if lines else "サービスが見つかりませんでした。"
 
         st.session_state.history.append(("assistant", assistant_reply))
-        st.chat_message("assistant").write(assistant_reply)  # ★ その場で描画
-        logger.info("Rendered %d services", assistant_reply.count("\n"))
+        logger.info("Rendered response (length: %d chars)", len(assistant_reply))
+        
+        # データベースに保存
+        if db_enabled:
+            try:
+                save_conversation(st.session_state.session_id, "assistant", assistant_reply)
+                # 検索クエリも保存
+                save_search_query(
+                    st.session_state.session_id,
+                    query=combined_question,
+                    intent_sentence=intent_sentence,
+                    intent_confidence=confidence,
+                    target_labels=target_labels,
+                    service_labels=service_labels,
+                    results_count=len(ranked_df) if ranked_df is not None else 0
+                )
+            except Exception as e:
+                logger.warning("Failed to save response to database: %s", e)
     except Exception:
         logger.exception("Rendering services failed")
         st.session_state.history.append(
-            ("assistant", header + "\n\n候補の表示でエラーが発生しました。入力条件を少し変えて再度お試しください。")
+            ("assistant", f"{combined_question}\n\n候補の表示でエラーが発生しました。入力条件を少し変えて再度お試しください。")
         )
 
     # 検索結果に対するフィードバックを受け付ける
@@ -223,6 +339,12 @@ if st.session_state.get("awaiting_feedback", False):
         st.session_state.history.append(("assistant", "ご利用ありがとうございました。別の質問もどうぞ。"))
         st.session_state.awaiting_feedback = False
         st.session_state.refine_loops = 0
+        # データベースに保存
+        if db_enabled:
+            try:
+                save_feedback(st.session_state.session_id, "yes")
+            except Exception as e:
+                logger.warning("Failed to save feedback: %s", e)
         st.rerun()
 
     if fb_no:
