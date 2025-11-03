@@ -40,6 +40,8 @@ with col_reload:
         st.session_state.refine_loops = 0
         st.session_state.last_query = ""
         st.session_state.last_labels = ([], [])
+        st.session_state.is_processing = False
+        st.session_state.stored_question = ""
         # ユーザープロフィールもリセット
         st.session_state.user_profile = {
             "年齢層": None,
@@ -99,6 +101,10 @@ if "last_query" not in st.session_state:
     st.session_state.last_query = ""
 if "last_labels" not in st.session_state:
     st.session_state.last_labels = ([], [])
+if "is_processing" not in st.session_state:
+    st.session_state.is_processing = False
+if "stored_question" not in st.session_state:
+    st.session_state.stored_question = ""
 # ユーザープロフィール情報（会話を通じて収集）
 if "user_profile" not in st.session_state:
     st.session_state.user_profile = {
@@ -168,7 +174,7 @@ with st.form("chat-form", clear_on_submit=True):
 # -----------------------------------------------------------------------------
 # 送信処理
 # -----------------------------------------------------------------------------
-if submitted and user_msg:
+if submitted and user_msg and not st.session_state.is_processing:
     # 1) store user message
     st.session_state.history.append(("user", user_msg))
     logger.info("Received user message: %s", user_msg)
@@ -184,9 +190,23 @@ if submitted and user_msg:
     combined_question = f"{st.session_state.pending_question} {user_msg}".strip()
     logger.info("Combined question: '%s' (pending='%s')",
                 combined_question, st.session_state.pending_question)
-    # 直近入力を保存
+    
+    # ローディング表示を追加して即座にrerun
+    st.session_state.history.append(("assistant", "🤔 考え中..."))
+    st.session_state.is_processing = True
+    st.session_state.stored_question = combined_question
     st.session_state.last_query = combined_question
+    st.rerun()
 
+# ローディングメッセージの後に処理を続ける
+if st.session_state.is_processing:
+    # ローディングメッセージを削除
+    if len(st.session_state.history) > 0 and st.session_state.history[-1][1] == "🤔 考え中...":
+        st.session_state.history.pop()
+    
+    combined_question = st.session_state.stored_question
+    st.session_state.is_processing = False
+    
     # 2) LangGraph workflow
     try:
         state = workflow.invoke(
