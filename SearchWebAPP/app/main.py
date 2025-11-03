@@ -376,7 +376,8 @@ if st.session_state.is_processing:
 
     # 検索結果に対するフィードバックを受け付ける
     st.session_state.awaiting_feedback = True
-    # rerunせず、このフレームでUIを描画
+    # 処理完了後にrerunして更新された履歴を表示
+    st.rerun()
 
 # -----------------------------------------------------------------------------
 # 検索結果へのフィードバック処理
