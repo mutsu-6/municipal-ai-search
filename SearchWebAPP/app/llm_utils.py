@@ -47,19 +47,6 @@ def label_question(
         "\n必ずJSONのみを出力してください。"
     )
     
-    # 会話履歴をフォーマット
-    history_context = ""
-    if conversation_history and len(conversation_history) > 0:
-        recent_history = conversation_history[-10:]
-        history_parts = []
-        for role, msg in recent_history:
-            if role == "user":
-                history_parts.append(f"ユーザー: {msg}")
-            elif role == "assistant":
-                history_parts.append(f"アシスタント: {msg}")
-        if history_parts:
-            history_context = "\n\n【前の会話】\n" + "\n".join(history_parts) + "\n"
-    
     # ユーザープロフィールをフォーマット
     profile_context = ""
     if user_profile:
@@ -73,8 +60,6 @@ def label_question(
         if profile_parts:
             profile_context = "\n\n【ユーザー情報】\n" + "\n".join(profile_parts) + "\n"
     
-    user_prompt = f"入力文: {question}{history_context}{profile_context}"
-
     # 会話履歴がある場合はmessages配列として渡す
     messages = [{"role": "system", "content": system_prompt}]
     if conversation_history and len(conversation_history) > 0:
