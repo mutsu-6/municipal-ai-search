@@ -143,19 +143,16 @@ class ServiceSelector:
             if profile_parts:
                 profile_context = "\n\n【ユーザー情報】\n" + "\n".join(profile_parts) + "\n"
         
-        # 会話履歴をフォーマット
-        history_context = ""
+        # 会話履歴をフォーマット（メッセージ配列として構築）
+        messages = []
         if conversation_history and len(conversation_history) > 0:
-            # 直近の会話履歴を含める（最大5往復分）
-            recent_history = conversation_history[-10:] if len(conversation_history) > 10 else conversation_history
-            history_parts = []
+            # 直近の会話履歴を含める（最大8往復分＝16メッセージ）
+            recent_history = conversation_history[-16:] if len(conversation_history) > 16 else conversation_history
             for role, msg in recent_history:
                 if role == "user":
-                    history_parts.append(f"ユーザー: {msg}")
+                    messages.append({"role": "user", "content": msg})
                 elif role == "assistant":
-                    history_parts.append(f"アシスタント: {msg}")
-            if history_parts:
-                history_context = "\n\n【前の会話履歴】\n" + "\n".join(history_parts) + "\n"
+                    messages.append({"role": "assistant", "content": msg})
         
         system_prompt = (
             "あなたは親切で知識豊富な自治体サービスの案内係です。ChatGPTと同レベルの"
@@ -182,21 +179,24 @@ class ServiceSelector:
             "- ユーモアや励ましを適度に交えつつ、専門性と正確性を重視する\n"
         )
         
-        user_prompt = (
-            f"ユーザーの質問: {user_query}{profile_context}{history_context}{labels_info}\n\n"
-            f"検索結果のサービス:\n{services_json}\n\n"
-            "上記の検索結果を基に、会話形式で詳細な説明を生成してください。"
-            "各サービスについて、どのような制度なのか、対象条件、申請方法、期限などを含めて説明してください。"
-            "ユーザー情報が不足している場合は、自然な形で追加の質問を促してください。"
-        )
+        # 現在の質問にユーザープロフィールとラベル情報を追加
+        current_query_with_context = f"ユーザーの質問: {user_query}{profile_context}{labels_info}\n\n"
+        current_query_with_context += f"検索結果のサービス:\n{services_json}\n\n"
+        current_query_with_context += "上記の検索結果を基に、会話形式で詳細な説明を生成してください。"
+        current_query_with_context += "各サービスについて、どのような制度なのか、対象条件、申請方法、期限などを含めて説明してください。"
+        current_query_with_context += "ユーザー情報が不足している場合は、自然な形で追加の質問を促してください。"
+        
+        # メッセージ配列を構築
+        full_messages = [
+            {"role": "system", "content": system_prompt},
+            *messages,  # 会話履歴を挿入
+            {"role": "user", "content": current_query_with_context},
+        ]
         
         try:
             resp = client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                messages=full_messages,
                 temperature=0.8,  # より人間らしい自然な会話のため温度を上げる
                 top_p=0.9,  # nucleus samplingで多様性を確保
                 presence_penalty=0.3,  # 繰り返しを減らす
