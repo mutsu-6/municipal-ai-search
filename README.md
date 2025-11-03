@@ -1,60 +1,117 @@
-# odb-search
-OpenData Bridgeで整形したデータ等を検索する機能
+# 🏛️ Municipal AI Search
 
-## 🌐 アクセス方法
+AI-powered municipal service search system with conversational interface.
 
-### ローカルネットワーク
-```
-http://localhost:8501          # ローカルPCから
-http://192.168.11.9:8501       # 同じネットワーク内のデバイスから
-```
+[![Streamlit Cloud](https://img.shields.io/badge/Streamlit-Cloud-FF4B4B)](https://share.streamlit.io)
+[![Python](https://img.shields.io/badge/Python-3.11-blue)](https://python.org)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 
-### インターネット公開方法
-詳細は [INTERNET_SHARING_GUIDE.md](INTERNET_SHARING_GUIDE.md) を参照
+## ✨ Features
 
-**簡単な方法：**
-```bash
-# ngrokを使用（一時公開）
-brew install ngrok
-ngrok http 8501
+- 🤖 **AI Conversational Search** - Natural language interface using GPT-4o-mini
+- 💬 **Continuous Conversation** - Remembers previous interactions
+- 👤 **User Profile Management** - Learns user preferences
+- 💾 **Persistent Storage** - MySQL database integration
+- 🔍 **Smart Guidance** - LangGraph workflow for intelligent assistance
+- 📊 **155 Municipal Services** - Comprehensive Kokubunji City service catalog
 
-# または Streamlit Cloud（永続的・無料）
-# https://share.streamlit.io/
-```
+## 🚀 Quick Start
 
-## 📚 ドキュメント
-
-- **QUICK_START.md** - クイックスタートガイド
-- **SHARING_INFO.md** - 共有方法と詳細情報
-- **INTERNET_SHARING_GUIDE.md** - インターネット公開ガイド
-- **SearchWebAPP/README.md** - 技術仕様とセットアップ
-
-## 🚀 すぐに使う
+### Local Development
 
 ```bash
 cd SearchWebAPP
 docker compose up
 ```
 
-ブラウザで http://localhost:8501 を開く
+Access at: http://localhost:8501
 
-## 📋 プロジェクト構成
+### Deploy to Streamlit Cloud
+
+1. Push to GitHub
+2. Go to https://share.streamlit.io/
+3. Select your repository
+4. Main file: `SearchWebAPP/app/main.py`
+5. Set environment variables
+6. Deploy!
+
+## 📚 Documentation
+
+- **[QUICK_START.md](QUICK_START.md)** - Get started quickly
+- **[SHARING_INFO.md](SHARING_INFO.md)** - Sharing and deployment info
+- **[INTERNET_SHARING_GUIDE.md](INTERNET_SHARING_GUIDE.md)** - Internet deployment guide
+- **[NEW_REPOSITORY_GUIDE.md](NEW_REPOSITORY_GUIDE.md)** - Create new repo guide
+- **[SearchWebAPP/README.md](SearchWebAPP/README.md)** - Technical specifications
+
+## 🏗️ Architecture
 
 ```
-odb-search/
-├── SearchWebAPP/          # メインアプリケーション
-├── QUICK_START.md         # クイックスタート
-├── SHARING_INFO.md        # 共有情報
-└── INTERNET_SHARING_GUIDE.md  # インターネット公開ガイド
+┌─────────────┐
+│   Streamlit │
+│  Frontend   │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────────┐
+│  LangGraph       │
+│  Workflow        │
+└──────┬───────────┘
+       │
+       ▼
+┌─────────────────────┐
+│  GPT-4o-mini        │
+│  + Embeddings       │
+└──────┬──────────────┘
+       │
+       ▼
+┌─────────────┐    ┌─────────┐
+│  MySQL      │    │ Catalog │
+│  Database   │    │ Search  │
+└─────────────┘    └─────────┘
 ```
 
-## ✨ 機能
+## 🛠️ Tech Stack
 
-- AI対話型自治体サービス検索
-- 会話履歴の永続化（MySQL）
-- ユーザープロフィール管理
-- 155件の国分寺市サービスデータ
+- **Frontend**: Streamlit 1.51.0
+- **AI**: OpenAI GPT-4o-mini, text-embedding-ada-002
+- **Database**: MySQL 8.0
+- **Backend**: Python 3.11
+- **Orchestration**: LangGraph
+- **Container**: Docker Compose
 
-## 📞 サポート
+## 🔒 Environment Variables
 
-問題がある場合は `docker compose logs` でログを確認してください。
+```env
+OPENAI_API_KEY=your-key
+LLM_MODEL=gpt-4o-mini
+OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
+MYSQL_HOST=mysql
+MYSQL_USER=root
+MYSQL_PASSWORD=root
+MYSQL_DATABASE=searchapp
+```
+
+## 📊 Data Source
+
+- **Municipality**: Kokubunji City
+- **Services**: 155 indexed services
+- **Data Format**: JSON
+- **Source**: https://www.city.kokubunji.tokyo.jp/
+
+## 🤝 Contributing
+
+Contributions welcome! Please read the documentation first.
+
+## 📝 License
+
+See [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- OpenAI for GPT-4o-mini and embeddings
+- Streamlit for the framework
+- Kokubunji City for open data
+
+---
+
+**Made with ❤️ for better municipal service access**
