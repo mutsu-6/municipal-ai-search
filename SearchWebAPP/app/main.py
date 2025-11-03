@@ -164,6 +164,13 @@ selector = ServiceSelector()
 for role, msg in st.session_state.history:
     st.chat_message("user" if role == "user" else "assistant").write(msg)
 
+# リフレッシュボタン（表示更新用）
+if st.session_state.history:
+    col_space, col_refresh = st.columns([8, 1])
+    with col_refresh:
+        if st.button("🔄 表示更新", type="secondary", use_container_width=True):
+            st.rerun()
+
 # -----------------------------------------------------------------------------
 # 入力フォーム
 # -----------------------------------------------------------------------------
