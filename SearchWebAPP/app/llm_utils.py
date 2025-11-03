@@ -266,7 +266,7 @@ class IntentBuilder:
     def __init__(self, model: str = DEFAULT_MODEL):
         self.model = model
 
-    def build(self, user_query: str) -> Dict[str, Any]:
+    def build(self, user_query: str, conversation_history: List[Tuple[str, str]] = None, user_profile: Dict[str, Any] = None) -> Dict[str, Any]:
         system_prompt = (
             "あなたは自治体サービス検索の案内係です。"
             "ユーザー質問から、検索で使う代表的な1文（短く具体的）を作成し、"
@@ -284,17 +284,26 @@ class IntentBuilder:
             "  環境・ごみ・リサイクル, まちづくり・都市整備, 産業・事業者支援, 文化・スポーツ, 交通・移動支援, 移住・定住促進, "
             "  男女共同参画・人権・相談, 行政運営・計画・評価, 選挙・政治参加, デジタル・IT関連, 消費生活・トラブル対応, その他\n"
         )
+        
+        # 会話履歴をmessages配列として構築
+        messages = [{"role": "system", "content": system_prompt}]
+        if conversation_history and len(conversation_history) > 0:
+            # 全ての会話履歴を含める
+            for role, msg in conversation_history:
+                if role == "user":
+                    messages.append({"role": "user", "content": msg})
+                elif role == "assistant":
+                    messages.append({"role": "assistant", "content": msg})
+        
         user_prompt = (
             f"ユーザー質問: {user_query}\n"
             "注意: intent_sentence は実際に検索にかける代表文です。可能なら手続名や補助金名を具体化してください。"
         )
+        messages.append({"role": "user", "content": user_prompt})
 
         resp = client.chat.completions.create(
             model=self.model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages=messages,
             temperature=0,
             response_format={"type": "json_object"},  # JSON を強制
         )

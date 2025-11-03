@@ -78,7 +78,13 @@ def decide_next(state: GraphState) -> GraphState:
 _intent_builder = IntentBuilder()
 
 def intent_node(state: GraphState) -> GraphState:
-    res = _intent_builder.build(state["question"])
+    conversation_history = state.get("conversation_history")
+    user_profile = state.get("user_profile")
+    res = _intent_builder.build(
+        state["question"],
+        conversation_history=conversation_history,
+        user_profile=user_profile
+    )
     state["intent_sentence"] = res.get("intent_sentence") or state["question"]
     # LLM側が返したラベルを優先（空なら既存値を残す）
     state["target_labels"] = res.get("target_labels") or state.get("target_labels", [])
