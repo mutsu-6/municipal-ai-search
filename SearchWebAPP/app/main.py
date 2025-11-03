@@ -26,7 +26,30 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 st.set_page_config(page_title="自治体サービス検索", layout="wide")
-st.title("自治体サービス検索システム")
+
+# タイトルとリロードボタン
+col_title, col_reload = st.columns([4, 1])
+with col_title:
+    st.title("自治体サービス検索システム")
+with col_reload:
+    if st.button("🔄 会話をリセット", type="secondary", use_container_width=True):
+        # 会話履歴のみをクリア（セッションIDは維持）
+        st.session_state.history = []
+        st.session_state.pending_question = ""
+        st.session_state.awaiting_feedback = False
+        st.session_state.refine_loops = 0
+        st.session_state.last_query = ""
+        st.session_state.last_labels = ([], [])
+        # ユーザープロフィールもリセット
+        st.session_state.user_profile = {
+            "年齢層": None,
+            "家族構成": None,
+            "関心事": [],
+            "急ぎの要件": None,
+            "収入状況": None,
+            "居住環境": None
+        }
+        st.rerun()
 
 # -----------------------------------------------------------------------------
 # データベース接続確認
