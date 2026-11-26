@@ -200,3 +200,4 @@ def test_db_connection() -> bool:
         logger.error("Database connection test failed: %s", e)
         return False
 
+
