@@ -119,4 +119,3 @@ https://municipal-ai-search.streamlit.app を共有
 
 **結論: まずはStreamlitアプリのURLを共有しましょう！** 🎉
 
-
